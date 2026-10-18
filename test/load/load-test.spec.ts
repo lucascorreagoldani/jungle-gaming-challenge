@@ -251,9 +251,9 @@ describe("Reproducible High-Load Benchmark & Verification Suite", () => {
 
     // 4. Print Benchmark Report
     console.log(`
-========================================================================
-🚀 JUNGLE GAMING - DISTRIBUTED WAGERING PROCESSOR LOAD BENCHMARK
-========================================================================
+------------------------------------------------------------------------
+[benchmark] load test report (1000 requests)
+------------------------------------------------------------------------
 Total Requests:          ${TOTAL_REQUESTS}
 Total Duration:          ${totalDurationMs.toFixed(2)} ms
 Throughput:              ${rps} req/sec
@@ -270,19 +270,19 @@ Operation Breakdown:
   - Rejected (Rule 9):   ${rejectedCount}
   - Errors (Exceptions): ${errorCount}
   - Lock Contentions:    ${engine.lockContentionCount}
-========================================================================
+------------------------------------------------------------------------
 `);
 
     expect(errorCount).toBe(0);
     expect(processedCount + replayCount + rejectedCount).toBe(TOTAL_REQUESTS);
 
     // 5. Post-Load Invariant Verification: 100% of wallets must have consistent ledgers!
-    console.log(`🔍 Reconciling ${WALLET_COUNT} wallets after load test...`);
+    console.log(`[benchmark] reconciliando ${WALLET_COUNT} carteiras apos teste...`);
     for (const w of wallets) {
       const rec = await reconcileWalletUseCase.execute(w.id);
       expect(rec.consistent).toBe(true);
       expect(rec.difference.amount).toBe("0.00");
     }
-    console.log(`✅ All ${WALLET_COUNT} wallets verified: 100% mathematical ledger consistency!`);
+    console.log(`[benchmark] ${WALLET_COUNT} carteiras verificadas com consistencia contabil`);
   });
 });

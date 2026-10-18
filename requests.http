@@ -1,4 +1,4 @@
-### Jungle Gaming — Distributed Wagering Processor HTTP Requests
+### Jungle Gaming: Distributed Wagering Processor HTTP Requests
 @baseUrl = http://localhost:3000
 @providerId = pragmatic-play
 

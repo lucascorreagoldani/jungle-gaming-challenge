@@ -45,7 +45,7 @@ export class Wallet {
   }
 
   /**
-   * Reconstrução a partir da persistência — não revalida transições de abertura.
+   * Reconstrução a partir da persistência, sem revalidar transições de abertura.
    */
   public static rehydrate(state: WalletState): Wallet {
     return new Wallet(

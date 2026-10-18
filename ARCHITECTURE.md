@@ -1,6 +1,6 @@
-# 🏛️ Architectural Decision Record & System Architecture
+# Architectural Decision Record & System Architecture
 
-## Distributed Wagering Processor — Jungle Gaming
+## Distributed Wagering Processor: Jungle Gaming
 
 ---
 
@@ -14,45 +14,45 @@ O **Distributed Wagering Processor** é o coração financeiro de uma plataforma
 4. **Resiliência a Falhas Concorrentes**: O sistema foi projetado para operar em topologias distribuídas com múltiplos nós de aplicação acessando simultaneamente as mesmas carteiras ("*hot wallets*").
 
 ```
-                                  ┌────────────────────────┐
-                                  │      Game Provider     │
-                                  └───────────┬────────────┘
-                                              │ HTTP POST /wagering/transactions
-                                              ▼
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│                                    API Gateway / NestJS                                │
-│                                                                                        │
-│   ┌─────────────────────┐   ┌───────────────────────────────┐   ┌───────────────────┐  │
-│   │ ProviderAuthGuard   │──▶│  GlobalExceptionFilter (RFC)  │──▶│ WageringController│  │
-│   └─────────────────────┘   └───────────────────────────────┘   └─────────┬─────────┘  │
-│                                                                           │            │
-│   ┌───────────────────────────────────────────────────────────────────────▼────────┐   │
-│   │ Application Layer: ProcessWagerTransactionUseCase                              │   │
-│   │                                                                                │   │
-│   │   1. BEGIN TX                                                                  │   │
-│   │   2. SELECT * FROM wallets WHERE id = :id FOR UPDATE   (Serialization Lock)    │   │
-│   │   3. Check Idempotency Key & Canonical Payload Hash    (RFC 8785)              │   │
-│   │   4. Apply Domain Betting Rules (BET, WIN, REFUND, ROLLBACK)                   │   │
-│   │   5. Update Wallet Balance (version++) & Insert Immutable Ledger Entry         │   │
-│   │   6. Enqueue Transactional Outbox Integration Event                            │   │
-│   │   7. COMMIT TX                                                                 │   │
-│   └──────────────────────────────────────┬─────────────────────────────────────────┘   │
-└──────────────────────────────────────────┼─────────────────────────────────────────────┘
-                                           │
-                         ┌─────────────────┴─────────────────┐
-                         ▼                                   ▼
-          ┌─────────────────────────────┐     ┌─────────────────────────────┐
-          │     PostgreSQL Database     │     │        AWS SQS FIFO         │
-          │  - wallets (row lock)       │     │                             │
-          │  - wallet_ledger_entries    │     │  - wager-transactions.fifo  │
-          │    (IMMUTABLE TRIGGER)      │◀────┤    (MessageGroupId: wallet) │
-          │  - wager_transactions       │     │  - DLQ                      │
-          │  - outbox_messages          │     └──────────────▲──────────────┘
-          │  - inbox_messages           │                    │
-          └─────────────────────────────┘                    │
-                         │                                   │
-                         │ SELECT ... FOR UPDATE SKIP LOCKED │
-                         └───────────────────────────────────┘
+                                  +------------------------+
+                                  |      Game Provider     |
+                                  +-----------+------------+
+                                              | HTTP POST /wagering/transactions
+                                              v
++----------------------------------------------------------------------------------------+
+|                                    API Gateway / NestJS                                |
+|                                                                                        |
+|   +---------------------+   +-------------------------------+   +-------------------+  |
+|   | ProviderAuthGuard   |-->|  GlobalExceptionFilter (RFC)  |-->| WageringController|  |
+|   +---------------------+   +-------------------------------+   +---------+---------+  |
+|                                                                           |            |
+|   +-----------------------------------------------------------------------v--------+   |
+|   | Application Layer: ProcessWagerTransactionUseCase                              |   |
+|   |                                                                                |   |
+|   |   1. BEGIN TX                                                                  |   |
+|   |   2. SELECT * FROM wallets WHERE id = :id FOR UPDATE   (Serialization Lock)    |   |
+|   |   3. Check Idempotency Key & Canonical Payload Hash    (RFC 8785)              |   |
+|   |   4. Apply Domain Betting Rules (BET, WIN, REFUND, ROLLBACK)                   |   |
+|   |   5. Update Wallet Balance (version++) & Insert Immutable Ledger Entry         |   |
+|   |   6. Enqueue Transactional Outbox Integration Event                            |   |
+|   |   7. COMMIT TX                                                                 |   |
+|   +--------------------------------------+-----------------------------------------+   |
++------------------------------------------+---------------------------------------------+
+                                           |
+                         +-----------------+-----------------+
+                         v                                   v
+          +-----------------------------+     +-----------------------------+
+          |     PostgreSQL Database     |     |        AWS SQS FIFO         |
+          |  - wallets (row lock)       |     |                             |
+          |  - wallet_ledger_entries    |     |  - wager-transactions.fifo  |
+          |    (IMMUTABLE TRIGGER)      |<----+    (MessageGroupId: wallet) |
+          |  - wager_transactions       |     |  - DLQ                      |
+          |  - outbox_messages          |     +--------------^--------------+
+          |  - inbox_messages           |                    |
+          +-----------------------------+                    |
+                         |                                   |
+                         | SELECT ... FOR UPDATE SKIP LOCKED |
+                         +-----------------------------------+
                                TransactionalOutboxPublisher
 ```
 
@@ -122,7 +122,7 @@ Em JavaScript/TypeScript, o tipo primitivo `number` utiliza precisão dupla IEEE
 ### Decisão: Lock Pessimista por `walletId`
 Optou-se pelo bloqueio pessimista via `this.em.findOne(WalletOrmEntity, { id: walletId }, { lockMode: LockMode.PESSIMISTIC_WRITE })`.
 
-### ⚠️ O Dilema da Ordem de Execução (Insight Crítico)
+### O Dilema da Ordem de Execução: Idempotencia e Bloqueio
 Em uma primeira análise intuitiva, desenvolvedores costumam verificar a chave de idempotência **antes** de abrir transação ou adquirir locks. No entanto, em um cenário de **50 requisições simultâneas com a mesma chave de idempotência**, se o check ocorrer antes do lock:
 1. As 50 requisições verificam a tabela `wager_transactions` simultaneamente.
 2. Nenhuma encontra a transação (pois nenhuma comitou ainda).

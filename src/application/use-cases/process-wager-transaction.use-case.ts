@@ -76,7 +76,7 @@ export class ProcessWagerTransactionUseCase {
         const outboxRepo = new MikroOutboxRepository(txEm);
 
         // 2. Lock Pessimista na Carteira (SELECT ... FOR UPDATE no PostgreSQL)
-        // A unidade de concorrência é a walletId — bloqueia imediatamente para garantir
+        // A unidade de concorrência é a walletId: bloqueia imediatamente para garantir
         // que verificações de saldo e checagens de idempotência concorrentes sejam estritamente serializadas.
         const wallet = await walletRepo.findById(input.walletId, "pessimistic_write");
         if (!wallet) {

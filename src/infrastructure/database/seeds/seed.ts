@@ -6,7 +6,7 @@ import { ProcessWagerTransactionUseCase } from "../../../application/use-cases/p
 import { WagerTransactionKind } from "../../../domain/models/wager-transaction.entity";
 
 async function runSeed() {
-  console.log("🌱 Initializing Database Seed for Jungle Gaming Wagering Processor...");
+  console.log("[seed] initializing database seed...");
   const orm = await MikroORM.init(mikroOrmConfig);
   const em = orm.em.fork();
 
@@ -20,7 +20,7 @@ async function runSeed() {
       playerId: "player-demo-brl",
       initialBalance: { amount: "1000.00", currency: "BRL" },
     });
-    console.log(`✅ Created Wallet BRL for player-demo-brl: ${wallet1.id}`);
+    console.log(`[seed] wallet BRL created: ${wallet1.id}`);
 
     // Processa aposta de teste
     await processWagerUseCase.execute({
@@ -34,9 +34,9 @@ async function runSeed() {
       kind: WagerTransactionKind.Bet,
       money: { amount: "50.00", currency: "BRL" },
     });
-    console.log(`✅ Processed initial BET of 50.00 BRL on wallet ${wallet1.id}`);
+    console.log(`[seed] initial BET 50.00 BRL processed for wallet: ${wallet1.id}`);
   } catch (err: any) {
-    console.log(`ℹ️ Wallet 1 might already exist: ${err.message}`);
+    console.log(`[seed] wallet 1 notice: ${err.message}`);
   }
 
   // 2. Criar Carteira Demo 2 (USD)
@@ -46,20 +46,16 @@ async function runSeed() {
       playerId: "player-demo-usd",
       initialBalance: { amount: "500.00", currency: "USD" },
     });
-    console.log(`✅ Created Wallet USD for player-demo-usd: ${wallet2.id}`);
+    console.log(`[seed] wallet USD created: ${wallet2.id}`);
   } catch (err: any) {
-    console.log(`ℹ️ Wallet 2 might already exist: ${err.message}`);
+    console.log(`[seed] wallet 2 notice: ${err.message}`);
   }
 
   await orm.close(true);
-  console.log(`
-🎉 Seed Completed! You can test immediately using:
-Wallet BRL ID: ${wallet1 ? wallet1.id : "<use existing>"}
-Wallet USD ID: ${wallet2 ? wallet2.id : "<use existing>"}
-`);
+  console.log(`[seed] completed. Wallet BRL: ${wallet1 ? wallet1.id : "existing"}, Wallet USD: ${wallet2 ? wallet2.id : "existing"}`);
 }
 
 runSeed().catch((err) => {
-  console.error("❌ Seed failed:", err);
+  console.error("[seed] error during execution:", err);
   process.exit(1);
 });

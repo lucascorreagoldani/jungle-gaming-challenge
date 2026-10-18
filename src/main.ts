@@ -22,7 +22,7 @@ async function bootstrap() {
 
   // Documentação OpenAPI / Swagger interativa em /api/docs
   const swaggerConfig = new DocumentBuilder()
-    .setTitle("Jungle Gaming — Distributed Wagering Processor")
+    .setTitle("Jungle Gaming: Distributed Wagering Processor")
     .setDescription(
       "High-concurrency financial wagering processing microservice with strict idempotency, pessimistic row locking, and immutable ledger.",
     )
@@ -42,8 +42,8 @@ async function bootstrap() {
 
   const port = Number(process.env.PORT) || 3000;
   await app.listen(port);
-  console.log(`[JUNGLE_GAMING] Distributed Wagering Processor running on http://localhost:${port}`);
-  console.log(`[JUNGLE_GAMING] Swagger Documentation available on http://localhost:${port}/api/docs`);
+  console.log(`[server] distributed wagering processor running on port ${port}`);
+  console.log(`[server] swagger documentation on http://localhost:${port}/api/docs`);
 }
 
 bootstrap();

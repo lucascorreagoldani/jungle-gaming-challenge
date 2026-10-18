@@ -24,17 +24,14 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
   beforeAll(async () => {
     // 1. Testa disponibilidade do PostgreSQL via MikroORM real
     try {
-      orm = await MikroORM.init({
-        ...mikroOrmConfig,
-        connect: true,
-      });
+      orm = await MikroORM.init(mikroOrmConfig);
       em = orm.em.fork() as EntityManager;
       // Ping real para confirmar conectividade ativa com a porta do PostgreSQL
       await em.getConnection().execute("SELECT 1");
       isPostgresAvailable = true;
-      console.log("PostgreSQL real conectado com sucesso!");
+      console.log("[integration] postgresql conectado com sucesso");
     } catch (err: any) {
-      console.log("PostgreSQL não disponível no ambiente:", err.message);
+      console.log("[integration] postgresql offline no ambiente:", err.message);
       isPostgresAvailable = false;
       if (orm) {
         try {
@@ -55,9 +52,9 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
       });
       await sqsClient.send(new ListQueuesCommand({}));
       isSqsAvailable = true;
-      console.log("LocalStack SQS real conectado com sucesso!");
+      console.log("[integration] localstack sqs conectado com sucesso");
     } catch (err: any) {
-      console.log("LocalStack SQS não disponível no ambiente:", err.message);
+      console.log("[integration] localstack sqs offline no ambiente:", err.message);
       isSqsAvailable = false;
     }
   });
@@ -72,7 +69,7 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
 
   it("1. PostgreSQL Engine Immutability Trigger: Direct SQL UPDATE or DELETE on wallet_ledger_entries must be blocked (SQL 23506)", async () => {
     if (!isPostgresAvailable || !em) {
-      console.log("Skipping Real PostgreSQL test: banco de dados offline neste host");
+      console.log("[integration] skipping postgresql test: database offline");
       expect(true).toBe(true);
       return;
     }
@@ -91,7 +88,6 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
         `UPDATE wallet_ledger_entries SET amount = '999.99' WHERE wallet_id = '${wallet.id}'`,
       );
     } catch (err: any) {
-      // O trigger prevent_ledger_modification() emite exceção com SQLState 23506
       triggerBlockedUpdate = true;
       expect(err.message).toContain("immutable append-only table");
     }
@@ -111,7 +107,7 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
 
   it("2. Real PostgreSQL Transactions & Pessimistic Locks: End-to-end Wager and Reconciliation", async () => {
     if (!isPostgresAvailable || !em) {
-      console.log("ℹ️ Skipping Real PostgreSQL test: banco de dados offline neste host");
+      console.log("[integration] skipping postgresql test: database offline");
       expect(true).toBe(true);
       return;
     }
@@ -151,7 +147,7 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
 
   it("3. Real SQS FIFO Integration: Send, Receive and Delete in LocalStack", async () => {
     if (!isSqsAvailable || !sqsClient) {
-      console.log("ℹ️ Skipping Real SQS test: LocalStack offline neste host");
+      console.log("[integration] skipping sqs test: localstack offline");
       expect(true).toBe(true);
       return;
     }
