@@ -15,8 +15,8 @@
     "test:load": "bun test test/load",
     "seed": "bun run src/infrastructure/database/seeds/seed.ts",
     "migration:create": "bun x mikro-orm migration:create --config ./src/mikro-orm.config.ts",
-    "migration:up": "bun run src/infrastructure/database/migrations/migrator.ts up",
-    "migration:down": "bun run src/infrastructure/database/migrations/migrator.ts down"
+    "migration:up": "bun run src/infrastructure/database/migrator.ts up",
+    "migration:down": "bun run src/infrastructure/database/migrator.ts down"
   },
   "mikro-orm": {
     "useTsNode": false,

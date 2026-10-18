@@ -89,7 +89,7 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
       );
     } catch (err: any) {
       triggerBlockedUpdate = true;
-      expect(err.message).toContain("immutable append-only table");
+      expect(err.message).toContain("strictly immutable");
     }
     expect(triggerBlockedUpdate).toBe(true);
 
@@ -100,7 +100,7 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
       );
     } catch (err: any) {
       triggerBlockedDelete = true;
-      expect(err.message).toContain("immutable append-only table");
+      expect(err.message).toContain("strictly immutable");
     }
     expect(triggerBlockedDelete).toBe(true);
   });
