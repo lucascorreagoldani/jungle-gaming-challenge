@@ -1,0 +1,141 @@
+### Jungle Gaming — Distributed Wagering Processor HTTP Requests
+@baseUrl = http://localhost:3000
+@providerId = pragmatic-play
+
+### 1. Health Liveness Probe
+GET {{baseUrl}}/health/live
+
+### 2. Health Readiness Probe
+GET {{baseUrl}}/health/ready
+
+### 3. Prometheus Operational Metrics
+GET {{baseUrl}}/metrics
+
+### 4. Metrics in Structured JSON Format
+GET {{baseUrl}}/metrics/json
+
+### 5. Create a New Wallet (BRL)
+# @name createWallet
+POST {{baseUrl}}/wallets
+Content-Type: application/json
+
+{
+  "playerId": "player-test-01",
+  "initialBalance": {
+    "amount": "100.00",
+    "currency": "BRL"
+  }
+}
+
+### Store walletId from creation response
+@walletId = {{createWallet.response.body.id}}
+
+### 6. Get Wallet by ID
+GET {{baseUrl}}/wallets/{{walletId}}
+
+### 7. Process BET (R$ 20,00)
+POST {{baseUrl}}/wagering/transactions
+Content-Type: application/json
+X-Provider-Id: {{providerId}}
+
+{
+  "providerId": "{{providerId}}",
+  "externalTransactionId": "bet-round-101-1",
+  "idempotencyKey": "{{providerId}}:round-101:bet-1",
+  "playerId": "player-test-01",
+  "walletId": "{{walletId}}",
+  "roundId": "round-101",
+  "gameId": "gates-of-olympus",
+  "kind": "BET",
+  "money": {
+    "amount": "20.00",
+    "currency": "BRL"
+  }
+}
+
+### 8. Idempotent Replay of BET (Same Key + Same Payload -> Replay 200 OK)
+POST {{baseUrl}}/wagering/transactions
+Content-Type: application/json
+X-Provider-Id: {{providerId}}
+
+{
+  "providerId": "{{providerId}}",
+  "externalTransactionId": "bet-round-101-1",
+  "idempotencyKey": "{{providerId}}:round-101:bet-1",
+  "playerId": "player-test-01",
+  "walletId": "{{walletId}}",
+  "roundId": "round-101",
+  "gameId": "gates-of-olympus",
+  "kind": "BET",
+  "money": {
+    "amount": "20.00",
+    "currency": "BRL"
+  }
+}
+
+### 9. Process WIN (R$ 50,00)
+POST {{baseUrl}}/wagering/transactions
+Content-Type: application/json
+X-Provider-Id: {{providerId}}
+
+{
+  "providerId": "{{providerId}}",
+  "externalTransactionId": "win-round-101-1",
+  "idempotencyKey": "{{providerId}}:round-101:win-1",
+  "playerId": "player-test-01",
+  "walletId": "{{walletId}}",
+  "roundId": "round-101",
+  "gameId": "gates-of-olympus",
+  "kind": "WIN",
+  "money": {
+    "amount": "50.00",
+    "currency": "BRL"
+  }
+}
+
+### 10. Process REFUND for BET
+POST {{baseUrl}}/wagering/transactions
+Content-Type: application/json
+X-Provider-Id: {{providerId}}
+
+{
+  "providerId": "{{providerId}}",
+  "externalTransactionId": "refund-round-101-1",
+  "idempotencyKey": "{{providerId}}:round-101:refund-1",
+  "playerId": "player-test-01",
+  "walletId": "{{walletId}}",
+  "roundId": "round-101",
+  "gameId": "gates-of-olympus",
+  "kind": "REFUND",
+  "money": {
+    "amount": "20.00",
+    "currency": "BRL"
+  },
+  "referenceExternalTransactionId": "bet-round-101-1"
+}
+
+### 11. Overdraft Attempt (Rule 9 Rejection: R$ 50.000,00 -> HTTP 422 Unprocessable Entity)
+POST {{baseUrl}}/wagering/transactions
+Content-Type: application/json
+X-Provider-Id: {{providerId}}
+
+{
+  "providerId": "{{providerId}}",
+  "externalTransactionId": "bet-overdraft-1",
+  "idempotencyKey": "{{providerId}}:overdraft-1",
+  "playerId": "player-test-01",
+  "walletId": "{{walletId}}",
+  "roundId": "round-overdraft",
+  "gameId": "gates-of-olympus",
+  "kind": "BET",
+  "money": {
+    "amount": "50000.00",
+    "currency": "BRL"
+  }
+}
+
+### 12. Get Wallet Ledger (Auditable Immutable History)
+GET {{baseUrl}}/wallets/{{walletId}}/ledger?limit=10
+
+### 13. Reconcile Wallet (Zero Difference Mathematical Invariant Check)
+POST {{baseUrl}}/wallets/{{walletId}}/reconcile

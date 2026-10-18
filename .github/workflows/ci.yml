@@ -1,0 +1,94 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    name: Build, Lint & Automated Test Suite
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: jungle_gaming
+          POSTGRES_USER: jungle
+          POSTGRES_PASSWORD: jungle_secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+      localstack:
+        image: localstack/localstack:3.0
+        env:
+          SERVICES: sqs
+          DEFAULT_REGION: us-east-1
+          AWS_DEFAULT_REGION: us-east-1
+        ports:
+          - 4566:4566
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun Runtime
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install Dependencies
+        run: bun install
+
+      - name: Wait for LocalStack & Create SQS FIFO Queues
+        run: |
+          echo "Waiting for LocalStack SQS to be ready..."
+          until curl -s http://localhost:4566/_localstack/health | grep -q "\"sqs\": \"running\"\|\"sqs\": \"available\""; do
+            sleep 2
+          done
+          echo "LocalStack is ready. Creating SQS FIFO queues..."
+          curl -s -X POST http://localhost:4566/000000000000 \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "Action=CreateQueue&QueueName=wager-transactions-dlq.fifo&Attributes.FifoQueue=true&Attributes.ContentBasedDeduplication=true&Version=2012-11-05"
+          curl -s -X POST http://localhost:4566/000000000000 \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "Action=CreateQueue&QueueName=wager-transactions.fifo&Attributes.FifoQueue=true&Attributes.ContentBasedDeduplication=true&Version=2012-11-05"
+          echo "SQS FIFO Queues created successfully."
+
+      - name: Run Database Migrations
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: jungle_gaming
+          DB_USER: jungle
+          DB_PASSWORD: jungle_secret
+        run: bun run migration:up
+
+      - name: TypeScript Static Typecheck
+        run: bun run typecheck
+
+      - name: Unit Tests Suite
+        run: bun run test:unit
+
+      - name: Real Infrastructure Integration Tests (PostgreSQL & SQS)
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: jungle_gaming
+          DB_USER: jungle
+          DB_PASSWORD: jungle_secret
+          AWS_ENDPOINT: http://localhost:4566
+        run: bun run test:integration
+
+      - name: Concurrency & Race Conditions Tests
+        run: bun run test:concurrency
+
+      - name: Reproducible Load Benchmark
+        run: bun run test:load
