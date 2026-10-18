@@ -1,3 +1,4 @@
+import { v4 as uuidv4 } from "uuid";
 import { IntegrationEvent } from "../events/integration-event.base";
 
 export interface OutboxMessageState {
@@ -23,9 +24,9 @@ export class OutboxMessage {
     private _publishedAt?: Date,
   ) { }
 
-  public static enqueue(event: IntegrationEvent<unknown>): OutboxMessage {
+  public static enqueue(event: IntegrationEvent<unknown>, id: string = uuidv4()): OutboxMessage {
     return new OutboxMessage(
-      event.eventId,
+      id,
       event.aggregateId,
       event.eventType,
       event.toJSON(),

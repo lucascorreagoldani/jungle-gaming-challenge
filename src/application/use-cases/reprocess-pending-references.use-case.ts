@@ -156,7 +156,10 @@ export class ReprocessPendingReferencesUseCase {
 
         if (ledgerEntry) {
           await innerLedgerRepo.save(ledgerEntry);
-          const balanceChanged = WalletBalanceChanged.from(wallet, ledgerEntry, eventCtx);
+          const balanceChanged = WalletBalanceChanged.from(wallet, ledgerEntry, {
+            ...eventCtx,
+            eventId: uuidv4(),
+          });
           await innerOutboxRepo.save(OutboxMessage.enqueue(balanceChanged));
         }
 

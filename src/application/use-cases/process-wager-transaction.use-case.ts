@@ -481,7 +481,10 @@ export class ProcessWagerTransactionUseCase {
         await outboxRepo.save(OutboxMessage.enqueue(processedEvent));
 
         if (ledgerEntry) {
-          const balanceChangedEvent = WalletBalanceChanged.from(wallet, ledgerEntry, eventContext);
+          const balanceChangedEvent = WalletBalanceChanged.from(wallet, ledgerEntry, {
+            ...eventContext,
+            eventId: uuidv4(),
+          });
           await outboxRepo.save(OutboxMessage.enqueue(balanceChangedEvent));
         }
 
