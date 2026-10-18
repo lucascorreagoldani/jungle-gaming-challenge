@@ -79,7 +79,7 @@ export class MikroWalletLedgerRepository implements IWalletLedgerRepository {
         COALESCE(SUM(CASE WHEN direction = 'DEBIT' THEN amount ELSE 0 END), 0)::text as total_debits,
         COUNT(*)::text as total_count
        FROM wallet_ledger_entries
-       WHERE wallet_id = ?`,
+       WHERE wallet_id = $1`,
       [walletId],
     );
 

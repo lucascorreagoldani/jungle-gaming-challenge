@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { MikroORM } from "@mikro-orm/postgresql";
-import mikroOrmConfig from "../../mikro-orm.config";
+import mikroOrmConfig from "../../../mikro-orm.config";
 
 const action = process.argv[2] || "up";
 

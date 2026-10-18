@@ -1,30 +1,18 @@
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { MikroORM, EntityManager } from "@mikro-orm/postgresql";
-import { SQSClient, SendMessageCommand, ReceiveMessageCommand, DeleteMessageCommand } from "@aws-sdk/client-sqs";
+import {
+  SQSClient,
+  SendMessageCommand,
+  ReceiveMessageCommand,
+  DeleteMessageCommand,
+  ListQueuesCommand,
+  GetQueueUrlCommand,
+} from "@aws-sdk/client-sqs";
 import mikroOrmConfig from "../../src/mikro-orm.config";
 import { CreateWalletUseCase } from "../../src/application/use-cases/create-wallet.use-case";
 import { ProcessWagerTransactionUseCase } from "../../src/application/use-cases/process-wager-transaction.use-case";
 import { ReconcileWalletUseCase } from "../../src/application/use-cases/reconcile-wallet.use-case";
 import { WagerTransactionKind, WagerTransactionStatus } from "../../src/domain/models/wager-transaction.entity";
-
-async function isPortOpen(host: string, port: number, timeoutMs = 1000): Promise<boolean> {
-  try {
-    const socket = await Bun.connect({
-      hostname: host,
-      port,
-      socket: {
-        data() { },
-        open(s) {
-          s.end();
-        },
-        error() { },
-      },
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", () => {
   let orm: MikroORM | null = null;
@@ -34,51 +22,64 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
   let isSqsAvailable = false;
 
   beforeAll(async () => {
-    isPostgresAvailable = await isPortOpen("localhost", 5432, 1000);
-    isSqsAvailable = await isPortOpen("localhost", 4566, 1000);
-
-    if (isPostgresAvailable) {
-      try {
-        orm = await MikroORM.init(mikroOrmConfig);
-        em = orm.em.fork() as EntityManager;
-        // Executa migrações reais no banco
-        await orm.migrator.up();
-      } catch (err) {
-        console.warn("PostgreSQL detected but connection/migration failed:", err);
-        isPostgresAvailable = false;
+    // 1. Testa disponibilidade do PostgreSQL via MikroORM real
+    try {
+      orm = await MikroORM.init({
+        ...mikroOrmConfig,
+        connect: true,
+      });
+      em = orm.em.fork() as EntityManager;
+      // Ping real para confirmar conectividade ativa com a porta do PostgreSQL
+      await em.getConnection().execute("SELECT 1");
+      isPostgresAvailable = true;
+      console.log("PostgreSQL real conectado com sucesso!");
+    } catch (err: any) {
+      console.log("PostgreSQL não disponível no ambiente:", err.message);
+      isPostgresAvailable = false;
+      if (orm) {
+        try {
+          await orm.close(true);
+        } catch { }
+        orm = null;
+        em = null;
       }
     }
 
-    if (isSqsAvailable) {
-      try {
-        sqsClient = new SQSClient({
-          region: "us-east-1",
-          endpoint: "http://localhost:4566",
-          credentials: { accessKeyId: "test", secretAccessKey: "test" },
-        });
-      } catch (err) {
-        console.warn("LocalStack detected but SQS init failed:", err);
-        isSqsAvailable = false;
-      }
+    // 2. Testa disponibilidade do LocalStack SQS real
+    try {
+      const endpoint = process.env.AWS_ENDPOINT || "http://localhost:4566";
+      sqsClient = new SQSClient({
+        region: "us-east-1",
+        endpoint,
+        credentials: { accessKeyId: "test", secretAccessKey: "test" },
+      });
+      await sqsClient.send(new ListQueuesCommand({}));
+      isSqsAvailable = true;
+      console.log("LocalStack SQS real conectado com sucesso!");
+    } catch (err: any) {
+      console.log("LocalStack SQS não disponível no ambiente:", err.message);
+      isSqsAvailable = false;
     }
   });
 
   afterAll(async () => {
     if (orm) {
-      await orm.close(true);
+      try {
+        await orm.close(true);
+      } catch { }
     }
   });
 
   it("1. PostgreSQL Engine Immutability Trigger: Direct SQL UPDATE or DELETE on wallet_ledger_entries must be blocked (SQL 23506)", async () => {
     if (!isPostgresAvailable || !em) {
-      console.log("ℹ️ Skipping Real PostgreSQL test: Docker container not active on localhost:5432");
+      console.log("Skipping Real PostgreSQL test: banco de dados offline neste host");
       expect(true).toBe(true);
       return;
     }
 
     const createWalletUseCase = new CreateWalletUseCase(em);
     const wallet = await createWalletUseCase.execute({
-      playerId: "player-real-pg-trigger",
+      playerId: `player-real-pg-trigger-${Date.now()}`,
       initialBalance: { amount: "150.00", currency: "BRL" },
     });
 
@@ -87,8 +88,7 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
     let triggerBlockedUpdate = false;
     try {
       await connection.execute(
-        `UPDATE wallet_ledger_entries SET amount = '999.99' WHERE wallet_id = ?`,
-        [wallet.id],
+        `UPDATE wallet_ledger_entries SET amount = '999.99' WHERE wallet_id = '${wallet.id}'`,
       );
     } catch (err: any) {
       // O trigger prevent_ledger_modification() emite exceção com SQLState 23506
@@ -100,8 +100,7 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
     let triggerBlockedDelete = false;
     try {
       await connection.execute(
-        `DELETE FROM wallet_ledger_entries WHERE wallet_id = ?`,
-        [wallet.id],
+        `DELETE FROM wallet_ledger_entries WHERE wallet_id = '${wallet.id}'`,
       );
     } catch (err: any) {
       triggerBlockedDelete = true;
@@ -112,7 +111,7 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
 
   it("2. Real PostgreSQL Transactions & Pessimistic Locks: End-to-end Wager and Reconciliation", async () => {
     if (!isPostgresAvailable || !em) {
-      console.log("ℹ️ Skipping Real PostgreSQL test: Docker container not active on localhost:5432");
+      console.log("ℹ️ Skipping Real PostgreSQL test: banco de dados offline neste host");
       expect(true).toBe(true);
       return;
     }
@@ -122,16 +121,16 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
     const reconcileWalletUseCase = new ReconcileWalletUseCase(em);
 
     const wallet = await createWalletUseCase.execute({
-      playerId: "player-real-pg-e2e",
+      playerId: `player-real-pg-e2e-${Date.now()}`,
       initialBalance: { amount: "200.00", currency: "BRL" },
     });
 
     // Processa aposta real
     const betRes = await processWagerUseCase.execute({
       providerId: "prov-real",
-      externalTransactionId: `real-tx-${Date.now()}-1`,
+      externalTransactionId: `real-tx-${Date.now()}`,
       idempotencyKey: `prov-real:real-bet-${Date.now()}`,
-      playerId: "player-real-pg-e2e",
+      playerId: wallet.playerId,
       walletId: wallet.id,
       roundId: "round-real-1",
       gameId: "slots",
@@ -152,12 +151,21 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
 
   it("3. Real SQS FIFO Integration: Send, Receive and Delete in LocalStack", async () => {
     if (!isSqsAvailable || !sqsClient) {
-      console.log("ℹ️ Skipping Real SQS test: LocalStack container not active on localhost:4566");
+      console.log("ℹ️ Skipping Real SQS test: LocalStack offline neste host");
       expect(true).toBe(true);
       return;
     }
 
-    const queueUrl = "http://localhost:4566/000000000000/wager-transactions.fifo";
+    let queueUrl = "http://localhost:4566/000000000000/wager-transactions.fifo";
+    try {
+      const getUrl = await sqsClient.send(
+        new GetQueueUrlCommand({ QueueName: "wager-transactions.fifo" }),
+      );
+      if (getUrl.QueueUrl) {
+        queueUrl = getUrl.QueueUrl;
+      }
+    } catch { }
+
     const deduplicationId = `dedup-${Date.now()}`;
     const groupId = "wallet-test-group";
 
@@ -166,7 +174,7 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
       new SendMessageCommand({
         QueueUrl: queueUrl,
         MessageBody: JSON.stringify({
-          eventType: "TestEvent",
+          eventType: "TestIntegrationEvent",
           data: { timestamp: new Date().toISOString() },
         }),
         MessageDeduplicationId: deduplicationId,
