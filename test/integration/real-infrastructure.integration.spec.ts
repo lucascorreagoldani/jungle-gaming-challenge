@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { MikroORM, EntityManager } from "@mikro-orm/postgresql";
 import {
   SQSClient,
+  CreateQueueCommand,
   SendMessageCommand,
   ReceiveMessageCommand,
   DeleteMessageCommand,
@@ -51,6 +52,17 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
         credentials: { accessKeyId: "test", secretAccessKey: "test" },
       });
       await sqsClient.send(new ListQueuesCommand({}));
+      try {
+        await sqsClient.send(
+          new CreateQueueCommand({
+            QueueName: "wager-transactions.fifo",
+            Attributes: {
+              FifoQueue: "true",
+              ContentBasedDeduplication: "true",
+            },
+          }),
+        );
+      } catch { }
       isSqsAvailable = true;
       console.log("[integration] localstack sqs conectado com sucesso");
     } catch (err: any) {
@@ -152,7 +164,7 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
       return;
     }
 
-    let queueUrl = "http://localhost:4566/000000000000/wager-transactions.fifo";
+    let queueUrl = "";
     try {
       const getUrl = await sqsClient.send(
         new GetQueueUrlCommand({ QueueName: "wager-transactions.fifo" }),
@@ -161,6 +173,27 @@ describe("Real Infrastructure Integration Tests (PostgreSQL & LocalStack SQS)", 
         queueUrl = getUrl.QueueUrl;
       }
     } catch { }
+
+    if (!queueUrl) {
+      try {
+        const createRes = await sqsClient.send(
+          new CreateQueueCommand({
+            QueueName: "wager-transactions.fifo",
+            Attributes: {
+              FifoQueue: "true",
+              ContentBasedDeduplication: "true",
+            },
+          }),
+        );
+        if (createRes.QueueUrl) {
+          queueUrl = createRes.QueueUrl;
+        }
+      } catch { }
+    }
+
+    if (!queueUrl) {
+      queueUrl = `${process.env.AWS_ENDPOINT || "http://localhost:4566"}/000000000000/wager-transactions.fifo`;
+    }
 
     const deduplicationId = `dedup-${Date.now()}`;
     const groupId = "wallet-test-group";

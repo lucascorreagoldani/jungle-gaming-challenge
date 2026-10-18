@@ -45,5 +45,8 @@ export class MikrowagerTransactionRepository implements IWagerTransactionReposit
       const entity = WagerTransactionOrmEntity.fromDomain(transaction);
       this.em.persist(entity);
     }
+    if (typeof (this.em as any).flush === "function") {
+      await this.em.flush();
+    }
   }
 }

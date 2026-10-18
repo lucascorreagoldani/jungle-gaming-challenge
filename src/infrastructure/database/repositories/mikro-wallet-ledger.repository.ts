@@ -19,6 +19,9 @@ export class MikroWalletLedgerRepository implements IWalletLedgerRepository {
   async save(entry: WalletLedgerEntry): Promise<void> {
     const entity = WalletLedgerEntryOrmEntity.fromDomain(entry);
     this.em.persist(entity);
+    if (typeof (this.em as any).flush === "function") {
+      await this.em.flush();
+    }
   }
 
   async findByWalletId(

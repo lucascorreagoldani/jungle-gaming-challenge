@@ -24,5 +24,8 @@ export class MikroInboxRepository implements IInboxRepository {
       const entity = InboxMessageOrmEntity.fromDomain(message);
       this.em.persist(entity);
     }
+    if (typeof (this.em as any).flush === "function") {
+      await this.em.flush();
+    }
   }
 }

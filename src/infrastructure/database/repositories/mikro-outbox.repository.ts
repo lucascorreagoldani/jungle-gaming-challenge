@@ -9,6 +9,9 @@ export class MikroOutboxRepository implements IOutboxRepository {
   async save(message: OutboxMessage): Promise<void> {
     const entity = OutboxMessageOrmEntity.fromDomain(message);
     this.em.persist(entity);
+    if (typeof (this.em as any).flush === "function") {
+      await this.em.flush();
+    }
   }
 
   async findPendingToPublish(limit: number, now: Date = new Date()): Promise<OutboxMessage[]> {
@@ -36,6 +39,9 @@ export class MikroOutboxRepository implements IOutboxRepository {
       entity.nextAttemptAt = message.nextAttemptAt;
       entity.publishedAt = message.publishedAt;
       this.em.persist(entity);
+      if (typeof (this.em as any).flush === "function") {
+        await this.em.flush();
+      }
     }
   }
 }

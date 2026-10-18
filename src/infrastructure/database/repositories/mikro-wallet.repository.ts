@@ -33,5 +33,8 @@ export class MikroWalletRepository implements IWalletRepository {
       const entity = WalletOrmEntity.fromDomain(wallet);
       this.em.persist(entity);
     }
+    if (typeof (this.em as any).flush === "function") {
+      await this.em.flush();
+    }
   }
 }

@@ -54,13 +54,13 @@ jobs:
             sleep 2
           done
           echo "LocalStack is ready. Creating SQS FIFO queues..."
-          curl -s -X POST http://localhost:4566/000000000000 \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "Action=CreateQueue&QueueName=wager-transactions-dlq.fifo&Attributes.FifoQueue=true&Attributes.ContentBasedDeduplication=true&Version=2012-11-05"
-          curl -s -X POST http://localhost:4566/000000000000 \
-            -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "Action=CreateQueue&QueueName=wager-transactions.fifo&Attributes.FifoQueue=true&Attributes.ContentBasedDeduplication=true&Version=2012-11-05"
-          echo "SQS FIFO Queues created successfully."
+          bun -e '
+            import { SQSClient, CreateQueueCommand } from "@aws-sdk/client-sqs";
+            const client = new SQSClient({ region: "us-east-1", endpoint: "http://localhost:4566", credentials: { accessKeyId: "test", secretAccessKey: "test" } });
+            await client.send(new CreateQueueCommand({ QueueName: "wager-transactions-dlq.fifo", Attributes: { FifoQueue: "true", ContentBasedDeduplication: "true" } }));
+            await client.send(new CreateQueueCommand({ QueueName: "wager-transactions.fifo", Attributes: { FifoQueue: "true", ContentBasedDeduplication: "true" } }));
+            console.log("SQS FIFO Queues created successfully.");
+          '
 
       - name: Run Database Migrations
         env:
