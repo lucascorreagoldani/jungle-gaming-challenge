@@ -14,16 +14,23 @@
     "test:concurrency": "bun test test/concurrency",
     "test:load": "bun test test/load",
     "seed": "bun run src/infrastructure/database/seeds/seed.ts",
-    "migration:create": "bun x mikro-orm migration:create",
-    "migration:up": "bun x mikro-orm migration:up",
-    "migration:down": "bun x mikro-orm migration:down"
+    "migration:create": "bun x mikro-orm migration:create --config ./src/mikro-orm.config.ts",
+    "migration:up": "bun run src/infrastructure/database/migrator.ts up",
+    "migration:down": "bun run src/infrastructure/database/migrator.ts down"
+  },
+  "mikro-orm": {
+    "useTsNode": false,
+    "configPaths": [
+      "./src/mikro-orm.config.ts"
+    ]
   },
   "devDependencies": {
     "@mikro-orm/cli": "^7.2.5",
     "@types/bun": "latest",
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.5",
-    "@types/uuid": "^11.0.0"
+    "@types/uuid": "^11.0.0",
+    "tsx": "^4.23.15"
   },
   "peerDependencies": {
     "typescript": "^7"
